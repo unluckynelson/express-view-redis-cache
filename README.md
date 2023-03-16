@@ -5,6 +5,11 @@ express-view-cache
 
 Unobtrusive solution to express 4.0.0 framework - cache response content in Redis database.
 
+*This is a fork of [express-view-cache](https://github.com/vodolaz095/express-view-cache) with some fixes and improvements.*
+
+- Adds `x-no-cache` header checking and clears the cache if it is present.
+- Adds debug option
+
 Shameless advertisement
 ==================
 You can hire the author of this package by Upwork - [https://www.upwork.com/freelancers/~0120ba573d09c66c51](https://www.upwork.com/freelancers/~0120ba573d09c66c51/)
