@@ -1,5 +1,5 @@
 {
-  "name": "express-view-cache",
+  "name": "express-view-redis-cache",
   "version": "0.2.1",
   "description": "Unobtrusive solution to express framework - cache rendered page on server side in redis database, without unnecessary database requests and rendering.",
   "main": "index.js",

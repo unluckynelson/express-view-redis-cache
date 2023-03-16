@@ -21,6 +21,7 @@ function EVC(options) {
   let config = {};
   let redisClient;
   let o;
+  let debug;
 
   if (typeof options === 'string') {
     o = url.parse(options);
@@ -39,6 +40,7 @@ function EVC(options) {
       'pass': options.pass,
       'client': options.client,
     };
+    debug = options.debug || false;
   }
 
   redisClient = config.client || redis.createClient(config.port, config.host, {
@@ -47,13 +49,28 @@ function EVC(options) {
   });
 
   /**
+   * @method EVC#log
+   * @description This method is used to log messages. It is a no-op by default, but can be overridden by the user.
+   * @param {...} args
+   * @return {undefined}
+   */
+  const log = function (...args) {
+    // if debug is enabled, log the arguments to console
+    if (debug) {
+      // eslint-disable-next-line no-console
+      console.log(args);
+    }
+  };
+
+  /**
    * @method EVC#customCachingMiddleware
    * @param {function} extractKeyName(req, function extractKeyNameCallback(error, key, ttl){...}){...}
    * @return {function} function(req, res, next){...}
    */
   this.customCachingMiddleware = function (extractKeyName) {
     return function (req, res, next) {
-      if (req.method === 'GET') { // only GET responses are cached
+      const shouldCache = req.method === 'GET' && req.headers['x-no-cache'] !== 'true';
+      if (shouldCache) { // only GET responses are cached
         let ended = false;
         let data = {};
         let ttl;
@@ -64,8 +81,12 @@ function EVC(options) {
               if(error) {
                 return cb(error);
               }
+              log('cache key', k);
+              needle = k;
               ttl = t;
-              cb(null, k);
+              const noCache = req.headers['x-no-cache'] === 'true' ? 'no-cache' : null;
+              if (noCache) log('no-cache header found');
+              cb(noCache, k);
             });
           },
           function (key,cb) {
@@ -74,8 +95,7 @@ function EVC(options) {
                 redisClient.hgetall(key, clb);
               },
               'age': function (clb) {
-                needle = key;
-                redisClient.ttl(key, clb);
+                redisClient.ttl(needle, clb);
               }
             }, function (error, obj) {
               if (error) {
@@ -87,10 +107,11 @@ function EVC(options) {
           },
           function (dataFound, age, cb) {
             if (dataFound) {
+              log('cache hit');
               res.set('Expires', new Date(Date.now() + age).toUTCString());
               res.set('Last-Modified', new Date(dataFound.savedAt).toUTCString());
               res.set('Content-Type', dataFound.contentType);
-              res.status(dataFound.statusCode);
+              res.status(parseInt(`${dataFound.statusCode}`));
               res.end(dataFound.content);
               ended = true;
               return cb(null, true);
@@ -125,6 +146,7 @@ function EVC(options) {
             } else {
               async.series([
                 function (clb) {
+                  log('cache miss');
                   redisClient.hmset(needle, {
                     'savedAt': new Date(),
                     'contentType': data['Content-Type'],
@@ -139,11 +161,15 @@ function EVC(options) {
             }
           }
         ], function (error){
-          if(error) {
-            return next(error);
-          }
-          if(!ended) {
-            next();
+          if (error === 'no-cache') {
+            redisClient.del(needle, () => next());
+          } else {
+            if (error) {
+              return next(error);
+            }
+            if (!ended) {
+              next();
+            }
           }
         });
       } else {
