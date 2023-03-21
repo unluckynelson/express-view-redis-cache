@@ -40,7 +40,7 @@ function EVC(options) {
       'pass': options.pass,
       'client': options.client,
     };
-    debug = options.debug === 1;
+    debug = options.debug;
   }
 
   redisClient = config.client || redis.createClient(config.port, config.host, {
@@ -58,7 +58,7 @@ function EVC(options) {
     // if debug is enabled, log the arguments to console
     if (debug) {
       // eslint-disable-next-line no-console
-      console.log(args);
+      console.log(...args);
     }
   };
 
@@ -133,17 +133,23 @@ function EVC(options) {
               data['Content-Type'] = res.getHeaders()['content-type'];
               data.statusCode = res.statusCode;
               data.content = buffer.join('');
-              res.set('Expires', data.Expires);
-              res.set('Last-Modified', new Date());
-              log('res.end', data.content);
-              end.apply(res, a);
-              cb(null, false);
+
+              // do not cache if the statuscode is invalid
+              if (res.statusCode >= 400) {
+                end.apply(res, a);
+                cb(res.statusMessage || 'error-during-render');
+              } else {
+                res.set('Expires', data.Expires);
+                res.set('Last-Modified', new Date());
+                end.apply(res, a);
+                cb(null, false);
+              }
             };
             next();
           },
           function (hit, cb) {
-            log('hit', hit);
             if (hit) {
+              log('cache hit');
               cb(null);
             } else {
               async.series([
