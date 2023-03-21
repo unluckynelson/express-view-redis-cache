@@ -40,7 +40,7 @@ function EVC(options) {
       'pass': options.pass,
       'client': options.client,
     };
-    debug = options.debug || false;
+    debug = options.debug === 1;
   }
 
   redisClient = config.client || redis.createClient(config.port, config.host, {
@@ -135,12 +135,14 @@ function EVC(options) {
               data.content = buffer.join('');
               res.set('Expires', data.Expires);
               res.set('Last-Modified', new Date());
+              log('res.end', data.content);
               end.apply(res, a);
               cb(null, false);
             };
             next();
           },
           function (hit, cb) {
+            log('hit', hit);
             if (hit) {
               cb(null);
             } else {
@@ -161,6 +163,7 @@ function EVC(options) {
             }
           }
         ], function (error){
+          log('error', error);
           if (error === 'no-cache') {
             redisClient.del(needle, () => next());
           } else {
